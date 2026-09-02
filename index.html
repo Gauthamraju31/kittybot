@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Waveshare ESP32-S3 Cat Face Simulator & Studio</title>
+  <title>Waveshare ESP32-S3 Cat Face Simulator & Web Serial Controller</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -17,12 +17,14 @@
         <div class="logo-icon">🐱</div>
         <div>
           <h1>KittyBot ESP32-S3</h1>
-          <p class="subtitle">Waveshare 1.28" IPS Round LCD Interactive Animation Studio</p>
+          <p class="subtitle">Waveshare 1.28" IPS Round LCD Animation Studio & Serial Controller</p>
         </div>
       </div>
       <div class="badge-group">
-        <span class="badge chip">ESP32-S3 Dual-Core</span>
-        <span class="badge display">240x240 GC9A01 LCD</span>
+        <button class="serial-btn" id="btnConnectSerial">
+          🔌 Connect USB Serial
+        </button>
+        <span class="badge serial-status" id="serialStatusBadge">⚪ Serial Offline</span>
         <span class="badge fps" id="fpsDisplay">60 FPS</span>
       </div>
     </header>
@@ -54,6 +56,7 @@
         <div class="tabs-nav">
           <button class="tab-btn active" data-tab="emotions">Emotions & Expressions</button>
           <button class="tab-btn" data-tab="customizer">Theme & Motion</button>
+          <button class="tab-btn" data-tab="serial">Serial Monitor</button>
           <button class="tab-btn" data-tab="guide">Flashing Guide</button>
         </div>
 
@@ -61,35 +64,35 @@
         <div class="tab-content active" id="tab-emotions">
           <h3>Preset Emotions</h3>
           <div class="emotion-grid">
-            <button class="emotion-btn active" data-emotion="idle">
+            <button class="emotion-btn active" data-emotion="idle" data-cmd="1">
               <span class="btn-emoji">😽</span>
               <span class="btn-label">Idle / Curious</span>
             </button>
-            <button class="emotion-btn" data-emotion="happy">
+            <button class="emotion-btn" data-emotion="happy" data-cmd="2">
               <span class="btn-emoji">😸</span>
               <span class="btn-label">Happy Purr</span>
             </button>
-            <button class="emotion-btn" data-emotion="sleepy">
+            <button class="emotion-btn" data-emotion="sleepy" data-cmd="3">
               <span class="btn-emoji">😴</span>
               <span class="btn-label">Sleepy ZzZ</span>
             </button>
-            <button class="emotion-btn" data-emotion="heart_eyes">
+            <button class="emotion-btn" data-emotion="heart_eyes" data-cmd="4">
               <span class="btn-emoji">😻</span>
               <span class="btn-label">Heart Eyes</span>
             </button>
-            <button class="emotion-btn" data-emotion="dizzy">
+            <button class="emotion-btn" data-emotion="dizzy" data-cmd="5">
               <span class="btn-emoji">😵</span>
               <span class="btn-label">Dizzy Shake</span>
             </button>
-            <button class="emotion-btn" data-emotion="surprised">
+            <button class="emotion-btn" data-emotion="surprised" data-cmd="6">
               <span class="btn-emoji">🙀</span>
               <span class="btn-label">Surprised</span>
             </button>
-            <button class="emotion-btn" data-emotion="angry">
+            <button class="emotion-btn" data-emotion="angry" data-cmd="7">
               <span class="btn-emoji">😾</span>
               <span class="btn-label">Fierce / Angry</span>
             </button>
-            <button class="emotion-btn" data-emotion="curious">
+            <button class="emotion-btn" data-emotion="curious" data-cmd="8">
               <span class="btn-emoji">🧐</span>
               <span class="btn-label">Curious Tilt</span>
             </button>
@@ -97,13 +100,13 @@
 
           <h3>Instant Action Triggers</h3>
           <div class="action-grid">
-            <button class="action-btn" id="btnBlink">
+            <button class="action-btn" id="btnBlink" data-cmd="b">
               ✨ Trigger Blink
             </button>
-            <button class="action-btn" id="btnPat">
+            <button class="action-btn" id="btnPat" data-cmd="p">
               ✋ Pat Head (Heart Burst)
             </button>
-            <button class="action-btn" id="btnShake">
+            <button class="action-btn" id="btnShake" data-cmd="s">
               🌀 Shake Board (Dizzy)
             </button>
           </div>
@@ -113,19 +116,19 @@
         <div class="tab-content" id="tab-customizer">
           <h3>Color Palette Preset</h3>
           <div class="theme-selector">
-            <button class="theme-card active" data-theme="0">
+            <button class="theme-card active" data-theme="0" data-cmd="t">
               <div class="theme-swatch" style="background: linear-gradient(135deg, #090B10, #00F0FF, #FF007F);"></div>
               <span>Cyberpunk Cyan</span>
             </button>
-            <button class="theme-card" data-theme="1">
+            <button class="theme-card" data-theme="1" data-cmd="t">
               <div class="theme-swatch" style="background: linear-gradient(135deg, #100800, #FFA500, #FF69B4);"></div>
               <span>Orange Tabby</span>
             </button>
-            <button class="theme-card" data-theme="2">
+            <button class="theme-card" data-theme="2" data-cmd="t">
               <div class="theme-swatch" style="background: linear-gradient(135deg, #000000, #FFD700, #FF4500);"></div>
               <span>Midnight & Gold</span>
             </button>
-            <button class="theme-card" data-theme="3">
+            <button class="theme-card" data-theme="3" data-cmd="t">
               <div class="theme-swatch" style="background: linear-gradient(135deg, #200814, #FFB6C1, #FF1493);"></div>
               <span>Pastel Pink</span>
             </button>
@@ -151,7 +154,20 @@
           </div>
         </div>
 
-        <!-- Tab 3: Flashing Guide -->
+        <!-- Tab 3: Serial Console -->
+        <div class="tab-content" id="tab-serial">
+          <h3>Web Serial Live Output (115200 Baud)</h3>
+          <div class="serial-console-box">
+            <textarea id="serialLogConsole" readonly placeholder="Connect USB Serial to view live hardware logs from ESP32-S3..."></textarea>
+            <div class="serial-controls">
+              <input type="text" id="serialInputText" placeholder="Type custom serial command (e.g. 1, 2, p, s, t)...">
+              <button class="action-btn" id="btnSendSerial">Send</button>
+              <button class="action-btn" id="btnClearSerial">Clear Console</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Flashing Guide -->
         <div class="tab-content" id="tab-guide">
           <h3>Flashing Firmware to Waveshare Board</h3>
           <div class="guide-box">
@@ -170,8 +186,8 @@
                 <pre class="code-block">pio run -t upload</pre>
               </li>
               <li>
-                <strong>Serial Interactive Controls:</strong>
-                Open PlatformIO Serial Monitor at 115200 baud. Send key codes <code>1</code>..<code>8</code> to change cat expressions or <code>p</code> to pat!
+                <strong>Web Serial Controls:</strong>
+                Click the <strong>🔌 Connect USB Serial</strong> button above to connect your browser directly to the ESP32-S3 over USB at 115200 baud!
               </li>
             </ol>
           </div>

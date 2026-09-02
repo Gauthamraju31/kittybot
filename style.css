@@ -88,7 +88,27 @@ body {
 
 .badge-group {
   display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.serial-btn {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(157, 78, 221, 0.2));
+  border: 1px solid var(--accent-cyan);
+  color: var(--text-main);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.serial-btn:hover {
+  background: linear-gradient(135deg, rgba(0, 240, 255, 0.4), rgba(157, 78, 221, 0.4));
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+  transform: translateY(-1px);
 }
 
 .badge {
@@ -101,8 +121,8 @@ body {
   font-family: var(--font-mono);
 }
 
-.badge.chip { color: var(--accent-cyan); border-color: rgba(0, 240, 255, 0.3); }
-.badge.display { color: var(--accent-pink); border-color: rgba(255, 0, 127, 0.3); }
+.badge.serial-status { color: var(--text-sub); border-color: var(--panel-border); }
+.badge.serial-status.connected { color: #00ff66; border-color: rgba(0, 255, 102, 0.4); background: rgba(0, 255, 102, 0.1); }
 .badge.fps { color: #00ff66; border-color: rgba(0, 255, 102, 0.3); }
 
 /* Workspace */
@@ -127,7 +147,6 @@ body {
   width: 100%;
 }
 
-/* Realistic Waveshare Round CNC Metal Case */
 .cnc-metal-case {
   width: 320px;
   height: 320px;
@@ -380,6 +399,49 @@ body {
   width: 100%;
   height: 36px;
   border-radius: 8px;
+}
+
+/* Serial Console */
+.serial-console-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#serialLogConsole {
+  width: 100%;
+  height: 200px;
+  background: #05070c;
+  color: #00ff66;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  resize: vertical;
+  line-height: 1.4;
+  outline: none;
+}
+
+.serial-controls {
+  display: flex;
+  gap: 10px;
+}
+
+#serialInputText {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  outline: none;
+}
+
+#serialInputText:focus {
+  border-color: var(--accent-cyan);
 }
 
 /* Sliders & Toggles */

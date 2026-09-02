@@ -1,5 +1,5 @@
-// HTML5 Canvas Procedural Cat Face Simulator
-// Matches C++ CatFace engine for Waveshare ESP32-S3 1.28" LCD
+// HTML5 Canvas Procedural Cat Face Simulator & Web Serial Controller
+// Designed for Waveshare ESP32-S3 1.28" LCD Board
 
 const THEMES = [
   // 0: Cyberpunk Neon Cyan
@@ -12,10 +12,138 @@ const THEMES = [
   { bg: "#200814", eyeBg: "#FFB6C1", pupil: "#3A0D22", highlight: "#FFFFFF", blush: "#FF1493", noseMouth: "#FF69B4", earOuter: "#351224", earInner: "#FF1493" }
 ];
 
+class WebSerialController {
+  constructor() {
+    this.port = null;
+    this.writer = null;
+    this.reader = null;
+    this.isConnected = false;
+
+    this.btnConnect = document.getElementById('btnConnectSerial');
+    this.statusBadge = document.getElementById('serialStatusBadge');
+    this.consoleElem = document.getElementById('serialLogConsole');
+
+    if (!('serial' in navigator)) {
+      if (this.btnConnect) {
+        this.btnConnect.disabled = true;
+        this.btnConnect.innerText = '⚠️ Web Serial Not Supported';
+        this.btnConnect.title = 'Web Serial API requires Chrome, Edge, or Opera over HTTPS/localhost.';
+      }
+    } else {
+      if (this.btnConnect) {
+        this.btnConnect.addEventListener('click', () => this.toggleConnect());
+      }
+    }
+  }
+
+  async toggleConnect() {
+    if (this.isConnected) {
+      await this.disconnect();
+    } else {
+      await this.connect();
+    }
+  }
+
+  async connect() {
+    try {
+      this.port = await navigator.serial.requestPort();
+      await this.port.open({ baudRate: 115200 });
+
+      this.isConnected = true;
+      this.updateStatus(true);
+
+      const textEncoder = new TextEncoderStream();
+      textEncoder.readable.pipeTo(this.port.writable);
+      this.writer = textEncoder.writable.getWriter();
+
+      this.logConsole('System', 'Connected to ESP32-S3 via Web Serial at 115200 baud!\n');
+      this.readLoop();
+    } catch (err) {
+      console.error('Serial connection error:', err);
+      this.logConsole('Error', `Failed to connect: ${err.message}\n`);
+      this.updateStatus(false);
+    }
+  }
+
+  async disconnect() {
+    this.isConnected = false;
+    if (this.reader) {
+      try { await this.reader.cancel(); } catch (e) {}
+    }
+    if (this.writer) {
+      try { await this.writer.close(); } catch (e) {}
+    }
+    if (this.port) {
+      try { await this.port.close(); } catch (e) {}
+    }
+    this.updateStatus(false);
+    this.logConsole('System', 'Serial connection closed.\n');
+  }
+
+  updateStatus(connected) {
+    if (connected) {
+      this.statusBadge.innerText = '🟢 Serial Connected';
+      this.statusBadge.classList.add('connected');
+      this.btnConnect.innerText = '🔌 Disconnect Serial';
+    } else {
+      this.statusBadge.innerText = '⚪ Serial Offline';
+      this.statusBadge.classList.remove('connected');
+      this.btnConnect.innerText = '🔌 Connect USB Serial';
+    }
+  }
+
+  async send(data) {
+    if (!this.isConnected || !this.writer) {
+      return;
+    }
+    try {
+      await this.writer.write(data);
+      this.logConsole('TX', `Sent command: "${data}"`);
+    } catch (err) {
+      console.error('Failed to write to serial:', err);
+      this.logConsole('Error', `Failed to send data: ${err.message}`);
+    }
+  }
+
+  async readLoop() {
+    const decoder = new TextDecoderStream();
+    const inputDone = this.port.readable.pipeTo(decoder.writable);
+    this.reader = decoder.readable.getReader();
+
+    try {
+      while (true) {
+        const { value, done } = await this.reader.read();
+        if (done) {
+          break;
+        }
+        if (value) {
+          this.logConsole('RX', value);
+        }
+      }
+    } catch (err) {
+      console.error('Error reading serial stream:', err);
+    } finally {
+      this.reader.releaseLock();
+    }
+  }
+
+  logConsole(prefix, text) {
+    if (!this.consoleElem) return;
+    const time = new Date().toLocaleTimeString();
+    if (prefix === 'RX') {
+      this.consoleElem.value += text;
+    } else {
+      this.consoleElem.value += `[${time}] [${prefix}] ${text}\n`;
+    }
+    this.consoleElem.scrollTop = this.consoleElem.scrollHeight;
+  }
+}
+
 class CatFaceSimulator {
-  constructor(canvas) {
+  constructor(canvas, serialController) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
+    this.serial = serialController;
 
     this.currentEmotion = 'idle';
     this.themeIndex = 0;
@@ -44,33 +172,48 @@ class CatFaceSimulator {
     this.fpsTimer = performance.now();
   }
 
-  setEmotion(emotion) {
+  setEmotion(emotion, cmd) {
     this.currentEmotion = emotion;
+    if (cmd && this.serial) {
+      this.serial.send(cmd);
+    }
   }
 
-  setTheme(index) {
+  setTheme(index, sendSerial = true) {
     if (index >= 0 && index < THEMES.length) {
       this.themeIndex = index;
       this.theme = THEMES[index];
+      if (sendSerial && this.serial) {
+        this.serial.send('t');
+      }
     }
   }
 
-  triggerBlink() {
+  triggerBlink(sendSerial = true) {
     if (!this.isBlinking && this.currentEmotion !== 'sleepy' && this.currentEmotion !== 'happy') {
       this.isBlinking = true;
       this.blinkProgress = 0;
+      if (sendSerial && this.serial) {
+        this.serial.send('b');
+      }
     }
   }
 
-  triggerPat() {
-    this.setEmotion('happy');
+  triggerPat(sendSerial = true) {
+    this.setEmotion('happy', sendSerial ? '2' : null);
     for (let i = 0; i < 5; i++) {
       this.spawnParticle(120 + (Math.random() * 80 - 40), 100 + (Math.random() * 60 - 30));
     }
+    if (sendSerial && this.serial) {
+      this.serial.send('p');
+    }
   }
 
-  triggerShake() {
-    this.setEmotion('dizzy');
+  triggerShake(sendSerial = true) {
+    this.setEmotion('dizzy', sendSerial ? '5' : null);
+    if (sendSerial && this.serial) {
+      this.serial.send('s');
+    }
   }
 
   spawnParticle(x, y) {
@@ -87,20 +230,17 @@ class CatFaceSimulator {
   update(dt) {
     this.animTime += dt;
 
-    // Smooth interpolation for look offset
     this.currentLookX += (this.targetLookX - this.currentLookX) * 0.15;
     this.currentLookY += (this.targetLookY - this.currentLookY) * 0.15;
 
-    // Idle random eye movements
     if (this.currentEmotion === 'idle' && this.autoEyeTracking && Math.random() < 0.02) {
       this.targetLookX = (Math.random() - 0.5) * 1.2;
       this.targetLookY = (Math.random() - 0.5) * 0.8;
     }
 
-    // Automatic Blinking
     const now = performance.now();
     if (now > this.nextBlinkTime && !this.isBlinking && this.currentEmotion === 'idle') {
-      this.triggerBlink();
+      this.triggerBlink(false);
       this.nextBlinkTime = now + 2500 + Math.random() * 3500;
     }
 
@@ -112,19 +252,16 @@ class CatFaceSimulator {
       }
     }
 
-    // Dizzy rotation angle
     if (this.currentEmotion === 'dizzy') {
       this.dizzyAngle += dt * 8.0;
     }
 
-    // Purr vibration offset
     if (this.currentEmotion === 'happy') {
       this.purrVibration = Math.sin(this.animTime * 30.0) * 1.5;
     } else {
       this.purrVibration = 0;
     }
 
-    // Particles update
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.x += p.vx;
@@ -135,7 +272,6 @@ class CatFaceSimulator {
       }
     }
 
-    // FPS Counter calculation
     this.frameCount++;
     if (now - this.fpsTimer >= 1000) {
       this.fps = this.frameCount;
@@ -168,7 +304,6 @@ class CatFaceSimulator {
     ctx.strokeStyle = color;
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    let lastX = x, lastY = y;
     for (let r = 2; r < radius; r += 1.5) {
       const a = angle + r * 0.4;
       const px = x + Math.cos(a) * r;
@@ -238,7 +373,6 @@ class CatFaceSimulator {
     const eyeX = centerX - eyeW / 2;
     const eyeY = centerY - eyeH / 2;
 
-    // 1. HAPPY (^ ^ crescent moon)
     if (this.currentEmotion === 'happy') {
       const yOffset = this.purrVibration;
       ctx.strokeStyle = this.theme.eyeBg;
@@ -252,7 +386,6 @@ class CatFaceSimulator {
       return;
     }
 
-    // 2. SLEEPY (u u closed)
     if (this.currentEmotion === 'sleepy') {
       const breathing = Math.sin(this.animTime * 2.0) * 2.0;
       ctx.strokeStyle = this.theme.eyeBg;
@@ -266,25 +399,21 @@ class CatFaceSimulator {
       return;
     }
 
-    // 3. Eye Outer BG
     ctx.fillStyle = this.theme.eyeBg;
     ctx.beginPath();
     ctx.roundRect(eyeX, eyeY, eyeW, eyeH, 22);
     ctx.fill();
 
-    // 4. HEART EYES
     if (this.currentEmotion === 'heart_eyes') {
       this.drawHeart(centerX, centerY - 8, 16, this.theme.blush);
       return;
     }
 
-    // 5. DIZZY SPIRAL
     if (this.currentEmotion === 'dizzy') {
       this.drawSpiral(centerX, centerY, 20, this.dizzyAngle * (isLeft ? 1 : -1), this.theme.pupil);
       return;
     }
 
-    // 6. Pupil with offset tracking
     const maxShiftX = 14;
     const maxShiftY = 12;
     const pupilX = centerX + this.currentLookX * maxShiftX;
@@ -293,13 +422,11 @@ class CatFaceSimulator {
     const pupilW = 18;
     const pupilH = (this.currentEmotion === 'angry') ? 36 : 30;
 
-    // Pupil Inner Body
     ctx.fillStyle = this.theme.pupil;
     ctx.beginPath();
     ctx.ellipse(pupilX, pupilY, pupilW / 2, pupilH / 2, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Specular Highlights
     ctx.fillStyle = this.theme.highlight;
     ctx.beginPath();
     ctx.arc(pupilX - 5, pupilY - 6, 4, 0, Math.PI * 2);
@@ -308,7 +435,6 @@ class CatFaceSimulator {
     ctx.arc(pupilX + 4, pupilY + 5, 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // 7. Blinking / Eyelid Clip
     if (this.isBlinking || this.currentEmotion === 'angry') {
       let lidRatio = this.isBlinking ? Math.sin(this.blinkProgress * Math.PI) : 0;
       if (this.currentEmotion === 'angry') lidRatio = 0.45;
@@ -365,7 +491,6 @@ class CatFaceSimulator {
     const noseX = 120;
     const noseY = 132 + vibY;
 
-    // Nose
     ctx.fillStyle = this.theme.noseMouth;
     ctx.beginPath();
     ctx.moveTo(noseX - 6, noseY - 4);
@@ -402,7 +527,6 @@ class CatFaceSimulator {
       ctx.lineTo(130, mouthY + 10);
       ctx.stroke();
     } else {
-      // Classic '3' cat mouth
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.arc(113, mouthY + 5, 5.5, 0, Math.PI);
@@ -421,14 +545,12 @@ class CatFaceSimulator {
     ctx.strokeStyle = this.theme.noseMouth;
     ctx.lineWidth = 2;
 
-    // Left Whiskers
     ctx.beginPath();
     ctx.moveTo(42, 138 + vibY); ctx.lineTo(12, 132 + twitch + vibY);
     ctx.moveTo(40, 146 + vibY); ctx.lineTo(8, 146 + vibY);
     ctx.moveTo(42, 154 + vibY); ctx.lineTo(12, 160 - twitch + vibY);
     ctx.stroke();
 
-    // Right Whiskers
     ctx.beginPath();
     ctx.moveTo(198, 138 + vibY); ctx.lineTo(228, 132 - twitch + vibY);
     ctx.moveTo(200, 146 + vibY); ctx.lineTo(232, 146 + vibY);
@@ -461,10 +583,11 @@ class CatFaceSimulator {
   }
 }
 
-// UI Setup & Event Listeners
+// Setup & Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
+  const serialController = new WebSerialController();
   const canvas = document.getElementById('lcdCanvas');
-  const sim = new CatFaceSimulator(canvas);
+  const sim = new CatFaceSimulator(canvas, serialController);
   sim.render();
 
   // Tab Navigation
@@ -486,14 +609,14 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => {
       emotionBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      sim.setEmotion(btn.dataset.emotion);
+      sim.setEmotion(btn.dataset.emotion, btn.dataset.cmd);
     });
   });
 
   // Action Buttons
-  document.getElementById('btnBlink').addEventListener('click', () => sim.triggerBlink());
-  document.getElementById('btnPat').addEventListener('click', () => sim.triggerPat());
-  document.getElementById('btnShake').addEventListener('click', () => sim.triggerShake());
+  document.getElementById('btnBlink').addEventListener('click', () => sim.triggerBlink(true));
+  document.getElementById('btnPat').addEventListener('click', () => sim.triggerPat(true));
+  document.getElementById('btnShake').addEventListener('click', () => sim.triggerShake(true));
 
   // Theme Selector Cards
   const themeCards = document.querySelectorAll('.theme-card');
@@ -501,9 +624,35 @@ document.addEventListener('DOMContentLoaded', () => {
     card.addEventListener('click', () => {
       themeCards.forEach(c => c.classList.remove('active'));
       card.classList.add('active');
-      sim.setTheme(parseInt(card.dataset.theme));
+      sim.setTheme(parseInt(card.dataset.theme), true);
     });
   });
+
+  // Serial Console Controls
+  const serialInput = document.getElementById('serialInputText');
+  const btnSend = document.getElementById('btnSendSerial');
+  const btnClear = document.getElementById('btnClearSerial');
+
+  if (btnSend && serialInput) {
+    const handleSend = () => {
+      const val = serialInput.value;
+      if (val) {
+        serialController.send(val);
+        serialInput.value = '';
+      }
+    };
+    btnSend.addEventListener('click', handleSend);
+    serialInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleSend();
+    });
+  }
+
+  if (btnClear) {
+    btnClear.addEventListener('click', () => {
+      const consoleElem = document.getElementById('serialLogConsole');
+      if (consoleElem) consoleElem.value = '';
+    });
+  }
 
   // Slider controls
   const sliderLookX = document.getElementById('sliderLookX');
@@ -547,9 +696,9 @@ document.addEventListener('DOMContentLoaded', () => {
     ripple.style.left = `${rx}px`;
     ripple.style.top = `${ry}px`;
     ripple.classList.remove('active');
-    void ripple.offsetWidth; // Trigger reflow
+    void ripple.offsetWidth;
     ripple.classList.add('active');
 
-    sim.triggerPat();
+    sim.triggerPat(true);
   });
 });
