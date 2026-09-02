@@ -163,6 +163,7 @@ class LottiePlayerManager {
   }
 
   load(path) {
+    if (!path) return;
     if (this.anim) {
       this.anim.destroy();
     }
@@ -697,20 +698,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const modeProcedural = document.getElementById('modeProcedural');
   const modeLottie = document.getElementById('modeLottie');
 
-  if (modeProcedural && modeLottie) {
-    modeProcedural.addEventListener('click', () => {
-      modeProcedural.classList.add('active');
-      modeLottie.classList.remove('active');
-      canvas.style.display = 'block';
-      lottieContainer.style.display = 'none';
-    });
-
-    modeLottie.addEventListener('click', () => {
+  const enableLottieMode = () => {
+    if (modeLottie && modeProcedural) {
       modeLottie.classList.add('active');
       modeProcedural.classList.remove('active');
-      canvas.style.display = 'none';
-      lottieContainer.style.display = 'block';
-    });
+    }
+    canvas.style.display = 'none';
+    lottieContainer.style.display = 'block';
+  };
+
+  const enableProceduralMode = () => {
+    if (modeProcedural && modeLottie) {
+      modeProcedural.classList.add('active');
+      modeLottie.classList.remove('active');
+    }
+    canvas.style.display = 'block';
+    lottieContainer.style.display = 'none';
+  };
+
+  if (modeProcedural && modeLottie) {
+    modeProcedural.addEventListener('click', enableProceduralMode);
+    modeLottie.addEventListener('click', enableLottieMode);
   }
 
   // Lottie Controls
@@ -726,6 +734,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Lottie Cards Click Listeners
+  const lottieCards = document.querySelectorAll('.lottie-card');
+  lottieCards.forEach(card => {
+    card.addEventListener('click', () => {
+      lottieCards.forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      enableLottieMode();
+      const path = card.dataset.path;
+      lottieMgr.load(path);
+
+      if (card.dataset.cmd && serialController) {
+        serialController.send(card.dataset.cmd);
+      }
+    });
+  });
+
   // Tab Navigation
   const tabBtns = document.querySelectorAll('.tab-btn');
   const tabContents = document.querySelectorAll('.tab-content');
@@ -737,6 +761,10 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.classList.add('active');
       const targetContent = document.getElementById(`tab-${btn.dataset.tab}`);
       if (targetContent) targetContent.classList.add('active');
+
+      if (btn.dataset.tab === 'lottie') {
+        enableLottieMode();
+      }
     });
   });
 
@@ -747,6 +775,10 @@ document.addEventListener('DOMContentLoaded', () => {
       emotionBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       sim.setEmotion(btn.dataset.emotion, btn.dataset.cmd);
+
+      if (btn.dataset.lottie) {
+        lottieMgr.load(btn.dataset.lottie);
+      }
     });
   });
 
