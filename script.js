@@ -1,5 +1,5 @@
-// HTML5 Canvas Procedural Cat Face Simulator & Web Serial Controller
-// Designed for Waveshare ESP32-S3 1.28" LCD Board
+// HTML5 Canvas Pro Cat Face Simulator v2.0 & Web Serial Controller
+// Features Elastic Spring Physics, Squash & Stretch, Pupil Dilation & Bézier Motion
 
 const THEMES = [
   // 0: Cyberpunk Neon Cyan
@@ -11,6 +11,26 @@ const THEMES = [
   // 3: Pastel Pink
   { bg: "#200814", eyeBg: "#FFB6C1", pupil: "#3A0D22", highlight: "#FFFFFF", blush: "#FF1493", noseMouth: "#FF69B4", earOuter: "#351224", earInner: "#FF1493" }
 ];
+
+class Spring {
+  constructor(val, k = 150.0, d = 0.75) {
+    this.pos = val;
+    this.vel = 0.0;
+    this.target = val;
+    this.stiffness = k;
+    this.damping = d;
+  }
+
+  impulse(force) {
+    this.vel += force;
+  }
+
+  update(dt) {
+    const force = (this.target - this.pos) * this.stiffness;
+    this.vel = (this.vel + force * dt) * this.damping;
+    this.pos += this.vel * dt;
+  }
+}
 
 class WebSerialController {
   constructor() {
@@ -27,7 +47,6 @@ class WebSerialController {
       if (this.btnConnect) {
         this.btnConnect.disabled = true;
         this.btnConnect.innerText = '⚠️ Web Serial Not Supported';
-        this.btnConnect.title = 'Web Serial API requires Chrome, Edge, or Opera over HTTPS/localhost.';
       }
     } else {
       if (this.btnConnect) {
@@ -107,18 +126,14 @@ class WebSerialController {
 
   async readLoop() {
     const decoder = new TextDecoderStream();
-    const inputDone = this.port.readable.pipeTo(decoder.writable);
+    this.port.readable.pipeTo(decoder.writable);
     this.reader = decoder.readable.getReader();
 
     try {
       while (true) {
         const { value, done } = await this.reader.read();
-        if (done) {
-          break;
-        }
-        if (value) {
-          this.logConsole('RX', value);
-        }
+        if (done) break;
+        if (value) this.logConsole('RX', value);
       }
     } catch (err) {
       console.error('Error reading serial stream:', err);
@@ -149,10 +164,14 @@ class CatFaceSimulator {
     this.themeIndex = 0;
     this.theme = THEMES[0];
 
-    this.currentLookX = 0;
-    this.currentLookY = 0;
-    this.targetLookX = 0;
-    this.targetLookY = 0;
+    // Spring Physics Simulation Nodes
+    this.springLookX = new Spring(0.0, 150.0, 0.75);
+    this.springLookY = new Spring(0.0, 150.0, 0.75);
+    this.springSquashX = new Spring(1.0, 240.0, 0.70);
+    this.springSquashY = new Spring(1.0, 240.0, 0.70);
+    this.springEarWiggle = new Spring(0.0, 160.0, 0.78);
+    this.springPupilDilation = new Spring(1.0, 120.0, 0.80);
+
     this.autoEyeTracking = true;
 
     this.isBlinking = false;
@@ -165,7 +184,6 @@ class CatFaceSimulator {
 
     this.particles = [];
 
-    // Performance FPS tracking
     this.lastTime = performance.now();
     this.fps = 60;
     this.frameCount = 0;
@@ -174,6 +192,10 @@ class CatFaceSimulator {
 
   setEmotion(emotion, cmd) {
     this.currentEmotion = emotion;
+    this.springSquashX.impulse(0.5);
+    this.springSquashY.impulse(-0.5);
+    this.springEarWiggle.impulse(4.0);
+
     if (cmd && this.serial) {
       this.serial.send(cmd);
     }
@@ -183,6 +205,8 @@ class CatFaceSimulator {
     if (index >= 0 && index < THEMES.length) {
       this.themeIndex = index;
       this.theme = THEMES[index];
+      this.springSquashX.impulse(0.8);
+      this.springSquashY.impulse(-0.8);
       if (sendSerial && this.serial) {
         this.serial.send('t');
       }
@@ -193,6 +217,7 @@ class CatFaceSimulator {
     if (!this.isBlinking && this.currentEmotion !== 'sleepy' && this.currentEmotion !== 'happy') {
       this.isBlinking = true;
       this.blinkProgress = 0;
+      this.springSquashY.impulse(-0.4);
       if (sendSerial && this.serial) {
         this.serial.send('b');
       }
@@ -201,7 +226,11 @@ class CatFaceSimulator {
 
   triggerPat(sendSerial = true) {
     this.setEmotion('happy', sendSerial ? '2' : null);
-    for (let i = 0; i < 5; i++) {
+    this.springSquashY.impulse(-4.5);
+    this.springSquashX.impulse(3.5);
+    this.springEarWiggle.impulse(12.0);
+
+    for (let i = 0; i < 6; i++) {
       this.spawnParticle(120 + (Math.random() * 80 - 40), 100 + (Math.random() * 60 - 30));
     }
     if (sendSerial && this.serial) {
@@ -211,6 +240,9 @@ class CatFaceSimulator {
 
   triggerShake(sendSerial = true) {
     this.setEmotion('dizzy', sendSerial ? '5' : null);
+    this.springLookX.impulse((Math.random() - 0.5) * 16.0);
+    this.springLookY.impulse((Math.random() - 0.5) * 16.0);
+    this.springEarWiggle.impulse(16.0);
     if (sendSerial && this.serial) {
       this.serial.send('s');
     }
@@ -221,23 +253,51 @@ class CatFaceSimulator {
       x: x,
       y: y,
       vx: (Math.random() - 0.5) * 4,
-      vy: -Math.random() * 3 - 2,
+      vy: -Math.random() * 4 - 2,
       alpha: 1.0,
-      scale: Math.random() * 6 + 6
+      scale: Math.random() * 8 + 8
     });
   }
 
   update(dt) {
     this.animTime += dt;
 
-    this.currentLookX += (this.targetLookX - this.currentLookX) * 0.15;
-    this.currentLookY += (this.targetLookY - this.currentLookY) * 0.15;
+    // 1. Update Springs
+    this.springLookX.update(dt);
+    this.springLookY.update(dt);
+    this.springSquashX.update(dt);
+    this.springSquashY.update(dt);
+    this.springEarWiggle.update(dt);
+    this.springPupilDilation.update(dt);
 
-    if (this.currentEmotion === 'idle' && this.autoEyeTracking && Math.random() < 0.02) {
-      this.targetLookX = (Math.random() - 0.5) * 1.2;
-      this.targetLookY = (Math.random() - 0.5) * 0.8;
+    // 2. Dynamic Dilation Target
+    switch (this.currentEmotion) {
+      case 'happy':
+      case 'heart_eyes':
+        this.springPupilDilation.target = 1.35;
+        break;
+      case 'surprised':
+      case 'curious':
+        this.springPupilDilation.target = 1.45;
+        break;
+      case 'angry':
+        this.springPupilDilation.target = 0.65;
+        break;
+      default:
+        this.springPupilDilation.target = 1.0;
+        break;
     }
 
+    // 3. Idle Eye Tracking
+    if (this.currentEmotion === 'idle' && this.autoEyeTracking && Math.random() < 0.02) {
+      this.springLookX.target = (Math.random() - 0.5) * 1.2;
+      this.springLookY.target = (Math.random() - 0.5) * 0.8;
+      if (Math.random() < 0.3) {
+        this.springEarWiggle.impulse((Math.random() - 0.5) * 8.0);
+      }
+    }
+
+    // 4. Automatic Blinking
     const now = performance.now();
     if (now > this.nextBlinkTime && !this.isBlinking && this.currentEmotion === 'idle') {
       this.triggerBlink(false);
@@ -249,6 +309,7 @@ class CatFaceSimulator {
       if (this.blinkProgress >= 1.0) {
         this.blinkProgress = 0;
         this.isBlinking = false;
+        this.springSquashY.impulse(0.3);
       }
     }
 
@@ -264,9 +325,10 @@ class CatFaceSimulator {
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
-      p.x += p.vx;
+      p.x += p.vx + Math.sin(this.animTime * 6.0 + i) * 0.8;
       p.y += p.vy;
-      p.alpha -= dt * 0.8;
+      p.vy += 1.5 * dt;
+      p.alpha -= dt * 0.7;
       if (p.alpha <= 0) {
         this.particles.splice(i, 1);
       }
@@ -321,7 +383,7 @@ class CatFaceSimulator {
 
   drawEars() {
     const ctx = this.ctx;
-    const earWiggle = Math.sin(this.animTime * 5.0) * 3.0;
+    const earWiggle = this.springEarWiggle.pos + Math.sin(this.animTime * 5.0) * 2.5;
 
     // Left Ear
     ctx.fillStyle = this.theme.earOuter;
@@ -360,15 +422,18 @@ class CatFaceSimulator {
 
   drawSingleEye(centerX, centerY, isLeft) {
     const ctx = this.ctx;
-    let eyeW = 46;
-    let eyeH = 58;
+    let baseW = 46;
+    let baseH = 58;
 
     if (this.currentEmotion === 'surprised') {
-      eyeW = 54; eyeH = 64;
+      baseW = 54; baseH = 64;
     } else if (this.currentEmotion === 'curious') {
-      if (isLeft) { eyeW = 50; eyeH = 60; }
-      else { eyeW = 40; eyeH = 48; }
+      if (isLeft) { baseW = 50; baseH = 60; }
+      else { baseW = 40; baseH = 48; }
     }
+
+    const eyeW = baseW * this.springSquashX.pos;
+    const eyeH = baseH * this.springSquashY.pos;
 
     const eyeX = centerX - eyeW / 2;
     const eyeY = centerY - eyeH / 2;
@@ -387,7 +452,7 @@ class CatFaceSimulator {
     }
 
     if (this.currentEmotion === 'sleepy') {
-      const breathing = Math.sin(this.animTime * 2.0) * 2.0;
+      const breathing = Math.sin(this.animTime * 2.0) * 2.5;
       ctx.strokeStyle = this.theme.eyeBg;
       ctx.lineWidth = 4.5;
       ctx.lineCap = 'round';
@@ -416,11 +481,15 @@ class CatFaceSimulator {
 
     const maxShiftX = 14;
     const maxShiftY = 12;
-    const pupilX = centerX + this.currentLookX * maxShiftX;
-    const pupilY = centerY + this.currentLookY * maxShiftY;
+    const pupilX = centerX + this.springLookX.pos * maxShiftX;
+    const pupilY = centerY + this.springLookY.pos * maxShiftY;
 
-    const pupilW = 18;
-    const pupilH = (this.currentEmotion === 'angry') ? 36 : 30;
+    const dilation = this.springPupilDilation.pos;
+    const basePupilW = (this.currentEmotion === 'angry') ? 14 : 18;
+    const basePupilH = (this.currentEmotion === 'angry') ? 36 : 30;
+
+    const pupilW = basePupilW * dilation;
+    const pupilH = basePupilH * dilation;
 
     ctx.fillStyle = this.theme.pupil;
     ctx.beginPath();
@@ -540,7 +609,7 @@ class CatFaceSimulator {
   drawWhiskers() {
     const ctx = this.ctx;
     const vibY = this.purrVibration;
-    const twitch = Math.sin(this.animTime * 12.0) * 2.0;
+    const twitch = Math.sin(this.animTime * 12.0) * 2.0 + this.springEarWiggle.pos * 0.3;
 
     ctx.strokeStyle = this.theme.noseMouth;
     ctx.lineWidth = 2;
@@ -660,13 +729,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const checkTracking = document.getElementById('checkEyeTracking');
 
   sliderLookX.addEventListener('input', (e) => {
-    sim.targetLookX = parseFloat(e.target.value);
+    sim.springLookX.target = parseFloat(e.target.value);
     sim.autoEyeTracking = false;
     checkTracking.checked = false;
   });
 
   sliderLookY.addEventListener('input', (e) => {
-    sim.targetLookY = parseFloat(e.target.value);
+    sim.springLookY.target = parseFloat(e.target.value);
     sim.autoEyeTracking = false;
     checkTracking.checked = false;
   });
@@ -684,8 +753,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const rect = screen.getBoundingClientRect();
     const normX = ((e.clientX - rect.left) - 120) / 120;
     const normY = ((e.clientY - rect.top) - 120) / 120;
-    sim.targetLookX = Math.max(-1, Math.min(1, normX));
-    sim.targetLookY = Math.max(-1, Math.min(1, normY));
+    sim.springLookX.target = Math.max(-1, Math.min(1, normX));
+    sim.springLookY.target = Math.max(-1, Math.min(1, normY));
   });
 
   screen.addEventListener('click', (e) => {

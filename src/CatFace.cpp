@@ -1,5 +1,4 @@
 #include "CatFace.h"
-#include <math.h>
 
 // Built-in Color Themes (RGB565 format)
 static const CatTheme THEMES[] = {
@@ -19,17 +18,23 @@ CatFace::CatFace() :
     currentEmotion(EMOTION_IDLE),
     targetEmotion(EMOTION_IDLE),
     emotionTimer(0),
-    currentLookX(0), currentLookY(0),
-    targetLookX(0), targetLookY(0),
     isBlinking(false),
     blinkProgress(0.0f),
     nextBlinkTime(0),
     animTime(0.0f),
-    earWaspProgress(0.0f),
     purrVibration(0.0f),
     dizzyAngle(0.0f)
 {
     theme = THEMES[0];
+
+    // Initialize Spring Physics Simulation Nodes
+    springLookX.init(0.0f, 150.0f, 0.75f);
+    springLookY.init(0.0f, 150.0f, 0.75f);
+    springSquashX.init(1.0f, 240.0f, 0.70f);
+    springSquashY.init(1.0f, 240.0f, 0.70f);
+    springEarWiggle.init(0.0f, 160.0f, 0.78f);
+    springPupilDilation.init(1.0f, 120.0f, 0.80f);
+
     for (int i = 0; i < MAX_PARTICLES; i++) {
         particles[i].active = false;
     }
@@ -47,7 +52,7 @@ CatFace::~CatFace() {
 
 void CatFace::begin(TFT_eSPI* tftPtr) {
     tft = tftPtr;
-    Serial.println("[CatFace] Initializing sprite buffer...");
+    Serial.println("[Pro CatFace Engine v2.0] Initializing double buffer sprite...");
 
     if (sprite != nullptr) {
         if (sprite->created()) {
@@ -62,20 +67,13 @@ void CatFace::begin(TFT_eSPI* tftPtr) {
 
     void* buf = sprite->createSprite(240, 240);
     if (buf == nullptr) {
-        Serial.println("[CatFace] Warning: Could not allocate 16-bit sprite in PSRAM/DRAM, falling back to 8-bit color...");
+        Serial.println("[CatFace] Fallback to 8-bit sprite...");
         sprite->setColorDepth(8);
         buf = sprite->createSprite(240, 240);
-        if (buf == nullptr) {
-            Serial.println("[CatFace] ERROR: Sprite creation failed completely! Check free heap.");
-        } else {
-            Serial.println("[CatFace] SUCCESS: 8-bit Sprite created (240x240).");
-        }
-    } else {
-        Serial.println("[CatFace] SUCCESS: 16-bit Sprite created (240x240).");
     }
-
     if (sprite->created()) {
         sprite->setSwapBytes(true);
+        Serial.println("[Pro CatFace Engine v2.0] Sprite allocated successfully!");
     }
     nextBlinkTime = millis() + 3000;
 }
@@ -83,6 +81,8 @@ void CatFace::begin(TFT_eSPI* tftPtr) {
 void CatFace::setTheme(int themeIndex) {
     if (themeIndex >= 0 && themeIndex < 4) {
         theme = THEMES[themeIndex];
+        springSquashX.impulse(0.8f);
+        springSquashY.impulse(-0.8f);
     }
 }
 
@@ -90,29 +90,42 @@ void CatFace::setEmotion(CatEmotion emotion) {
     currentEmotion = emotion;
     targetEmotion = emotion;
     emotionTimer = millis();
+
+    // Trigger elastic spring response on emotion change
+    springSquashX.impulse(0.5f);
+    springSquashY.impulse(-0.5f);
+    springEarWiggle.impulse(4.0f);
 }
 
 void CatFace::setLookTarget(float normX, float normY) {
-    targetLookX = constrain(normX, -1.0f, 1.0f);
-    targetLookY = constrain(normY, -1.0f, 1.0f);
+    springLookX.target = constrain(normX, -1.0f, 1.0f);
+    springLookY.target = constrain(normY, -1.0f, 1.0f);
 }
 
 void CatFace::triggerBlink() {
     if (!isBlinking && currentEmotion != EMOTION_SLEEPY && currentEmotion != EMOTION_HAPPY) {
         isBlinking = true;
         blinkProgress = 0.0f;
+        springSquashY.impulse(-0.4f);
     }
 }
 
 void CatFace::triggerPat() {
     setEmotion(EMOTION_HAPPY);
-    for (int i = 0; i < 4; i++) {
+    springSquashY.impulse(-4.5f);
+    springSquashX.impulse(3.5f);
+    springEarWiggle.impulse(12.0f);
+
+    for (int i = 0; i < 6; i++) {
         spawnParticle(120 + random(-40, 40), 100 + random(-30, 30));
     }
 }
 
 void CatFace::triggerShake() {
     setEmotion(EMOTION_DIZZY);
+    springLookX.impulse(random(-8, 8));
+    springLookY.impulse(random(-8, 8));
+    springEarWiggle.impulse(16.0f);
 }
 
 uint16_t CatFace::color565(uint8_t r, uint8_t g, uint8_t b) {
@@ -123,14 +136,42 @@ void CatFace::update(unsigned long deltaTimeMs) {
     float dt = deltaTimeMs / 1000.0f;
     animTime += dt;
 
-    currentLookX += (targetLookX - currentLookX) * 0.15f;
-    currentLookY += (targetLookY - currentLookY) * 0.15f;
+    // 1. Update Spring Physics Simulation
+    springLookX.update(dt);
+    springLookY.update(dt);
+    springSquashX.update(dt);
+    springSquashY.update(dt);
+    springEarWiggle.update(dt);
+    springPupilDilation.update(dt);
 
-    if (currentEmotion == EMOTION_IDLE && random(0, 100) < 3) {
-        targetLookX = (random(-100, 100) / 100.0f) * 0.6f;
-        targetLookY = (random(-80, 80) / 100.0f) * 0.4f;
+    // 2. Dynamic Pupil Dilation target per emotion
+    switch (currentEmotion) {
+        case EMOTION_HAPPY:
+        case EMOTION_HEART_EYES:
+            springPupilDilation.target = 1.35f;
+            break;
+        case EMOTION_SURPRISED:
+        case EMOTION_CURIOUS:
+            springPupilDilation.target = 1.45f;
+            break;
+        case EMOTION_ANGRY:
+            springPupilDilation.target = 0.65f;
+            break;
+        default:
+            springPupilDilation.target = 1.0f;
+            break;
     }
 
+    // 3. Idle random eye movement & ear twitches
+    if (currentEmotion == EMOTION_IDLE && random(0, 100) < 3) {
+        springLookX.target = (random(-100, 100) / 100.0f) * 0.6f;
+        springLookY.target = (random(-80, 80) / 100.0f) * 0.4f;
+        if (random(0, 10) < 3) {
+            springEarWiggle.impulse(random(-5, 5));
+        }
+    }
+
+    // 4. Automatic Blinking
     if (millis() > nextBlinkTime && !isBlinking && currentEmotion == EMOTION_IDLE) {
         triggerBlink();
         nextBlinkTime = millis() + random(2500, 6000);
@@ -141,25 +182,30 @@ void CatFace::update(unsigned long deltaTimeMs) {
         if (blinkProgress >= 1.0f) {
             blinkProgress = 0.0f;
             isBlinking = false;
+            springSquashY.impulse(0.3f);
         }
     }
 
+    // 5. Emotion auto-reset
     if (currentEmotion != EMOTION_IDLE && currentEmotion != EMOTION_SLEEPY) {
         if (millis() - emotionTimer > 4000) {
             setEmotion(EMOTION_IDLE);
         }
     }
 
+    // 6. Dizzy rotation
     if (currentEmotion == EMOTION_DIZZY) {
         dizzyAngle += dt * 8.0f;
     }
 
+    // 7. Purr vibration
     if (currentEmotion == EMOTION_HAPPY) {
         purrVibration = sinf(animTime * 30.0f) * 1.5f;
     } else {
         purrVibration = 0.0f;
     }
 
+    // 8. Particle updates
     updateParticles(dt);
 }
 
@@ -169,9 +215,11 @@ void CatFace::spawnParticle(float x, float y) {
             particles[i].x = x;
             particles[i].y = y;
             particles[i].vx = (random(-30, 30) / 10.0f);
-            particles[i].vy = -random(20, 50) / 10.0f;
+            particles[i].vy = -random(30, 60) / 10.0f;
             particles[i].alpha = 1.0f;
-            particles[i].scale = random(6, 12);
+            particles[i].scale = random(8, 14);
+            particles[i].rotation = random(0, 360);
+            particles[i].rotVel = random(-180, 180);
             particles[i].active = true;
             break;
         }
@@ -181,9 +229,11 @@ void CatFace::spawnParticle(float x, float y) {
 void CatFace::updateParticles(float dt) {
     for (int i = 0; i < MAX_PARTICLES; i++) {
         if (particles[i].active) {
-            particles[i].x += particles[i].vx;
+            particles[i].x += particles[i].vx + sinf(animTime * 6.0f + i) * 0.8f;
             particles[i].y += particles[i].vy;
-            particles[i].alpha -= dt * 0.8f;
+            particles[i].vy += 1.5f * dt; // Gravity
+            particles[i].rotation += particles[i].rotVel * dt;
+            particles[i].alpha -= dt * 0.7f;
             if (particles[i].alpha <= 0.0f) {
                 particles[i].active = false;
             }
@@ -196,7 +246,7 @@ void CatFace::drawBackground() {
 }
 
 void CatFace::drawEars() {
-    float earWiggle = sinf(animTime * 5.0f) * 3.0f;
+    float earWiggle = springEarWiggle.pos + sinf(animTime * 5.0f) * 2.5f;
     if (currentEmotion == EMOTION_CURIOUS) earWiggle *= 2.5f;
 
     // Left Ear
@@ -234,21 +284,24 @@ void CatFace::drawSpiral(int16_t x, int16_t y, int16_t radius, float angle, uint
 }
 
 void CatFace::drawSingleEye(int centerX, int centerY, bool isLeft) {
-    int eyeW = 46;
-    int eyeH = 58;
+    int baseW = 46;
+    int baseH = 58;
 
     if (currentEmotion == EMOTION_SURPRISED) {
-        eyeW = 54;
-        eyeH = 64;
+        baseW = 54; baseH = 64;
     } else if (currentEmotion == EMOTION_CURIOUS) {
-        if (isLeft) { eyeW = 50; eyeH = 60; }
-        else { eyeW = 40; eyeH = 48; }
+        if (isLeft) { baseW = 50; baseH = 60; }
+        else { baseW = 40; baseH = 48; }
     }
+
+    // Apply Squash & Stretch spring factors
+    int eyeW = (int)(baseW * springSquashX.pos);
+    int eyeH = (int)(baseH * springSquashY.pos);
 
     int eyeX = centerX - eyeW / 2;
     int eyeY = centerY - eyeH / 2;
 
-    // 1. Emotion: HAPPY (^ ^)
+    // 1. HAPPY (^ ^)
     if (currentEmotion == EMOTION_HAPPY) {
         int yOffset = (int)purrVibration;
         sprite->drawWideLine(centerX - 20, centerY + yOffset, centerX, centerY - 12 + yOffset, 5, theme.eyeBg);
@@ -256,43 +309,50 @@ void CatFace::drawSingleEye(int centerX, int centerY, bool isLeft) {
         return;
     }
 
-    // 2. Emotion: SLEEPY (u u)
+    // 2. SLEEPY (u u)
     if (currentEmotion == EMOTION_SLEEPY) {
-        float breathing = sinf(animTime * 2.0f) * 2.0f;
+        float breathing = sinf(animTime * 2.0f) * 2.5f;
         sprite->drawWideLine(centerX - 20, centerY - 5 + breathing, centerX, centerY + 10 + breathing, 4, theme.eyeBg);
         sprite->drawWideLine(centerX, centerY + 10 + breathing, centerX + 20, centerY - 5 + breathing, 4, theme.eyeBg);
         return;
     }
 
-    // 3. Eye Outer BG
+    // 3. Eye Base Capsule
     sprite->fillRoundRect(eyeX, eyeY, eyeW, eyeH, 22, theme.eyeBg);
 
-    // 4. Emotion: HEART_EYES
+    // 4. HEART EYES
     if (currentEmotion == EMOTION_HEART_EYES) {
         drawHeart(centerX, centerY, 16, theme.blush);
         return;
     }
 
-    // 5. Emotion: DIZZY
+    // 5. DIZZY SPIRAL
     if (currentEmotion == EMOTION_DIZZY) {
         drawSpiral(centerX, centerY, 20, dizzyAngle * (isLeft ? 1 : -1), theme.pupil);
         return;
     }
 
-    // 6. Pupil calculation
-    int maxPupilShiftX = 14;
-    int maxPupilShiftY = 12;
-    int pupilX = centerX + (int)(currentLookX * maxPupilShiftX);
-    int pupilY = centerY + (int)(currentLookY * maxPupilShiftY);
+    // 6. Pupil with Spring Physics look-offsets & Dilation
+    int maxShiftX = 14;
+    int maxShiftY = 12;
+    int pupilX = centerX + (int)(springLookX.pos * maxShiftX);
+    int pupilY = centerY + (int)(springLookY.pos * maxShiftY);
 
-    int pupilW = 18;
-    int pupilH = (currentEmotion == EMOTION_ANGRY) ? 36 : 30;
+    float dilation = springPupilDilation.pos;
+    int basePupilW = (currentEmotion == EMOTION_ANGRY) ? 14 : 18;
+    int basePupilH = (currentEmotion == EMOTION_ANGRY) ? 36 : 30;
 
+    int pupilW = (int)(basePupilW * dilation);
+    int pupilH = (int)(basePupilH * dilation);
+
+    // Dynamic Pupil Inner Body
     sprite->fillEllipse(pupilX, pupilY, pupilW / 2, pupilH / 2, theme.pupil);
+
+    // Multi-layer Specular Sparkle Highlights
     sprite->fillCircle(pupilX - 5, pupilY - 6, 4, theme.highlight);
     sprite->fillCircle(pupilX + 4, pupilY + 5, 2, theme.highlight);
 
-    // 7. Blinking / Eyelid Overlay
+    // 7. Organic Curved Eyelid Overlay
     if (isBlinking || currentEmotion == EMOTION_ANGRY) {
         float lidRatio = isBlinking ? (sinf(blinkProgress * 3.14159f)) : 0.0f;
         if (currentEmotion == EMOTION_ANGRY) lidRatio = 0.45f;
@@ -358,7 +418,7 @@ void CatFace::drawNoseAndMouth() {
 
 void CatFace::drawWhiskers() {
     int vibrationY = (int)purrVibration;
-    float twitch = sinf(animTime * 12.0f) * 2.0f;
+    float twitch = sinf(animTime * 12.0f) * 2.0f + springEarWiggle.pos * 0.3f;
     uint16_t color = theme.noseMouth;
 
     sprite->drawLine(42, 138 + vibrationY, 12, 132 + twitch + vibrationY, color);
