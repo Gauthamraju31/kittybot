@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waveshare ESP32-S3 Cat Face Simulator & Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-icon">🐱</div>
+        <div>
+          <h1>KittyBot ESP32-S3</h1>
+          <p class="subtitle">Waveshare 1.28" IPS Round LCD Interactive Animation Studio</p>
+        </div>
+      </div>
+      <div class="badge-group">
+        <span class="badge chip">ESP32-S3 Dual-Core</span>
+        <span class="badge display">240x240 GC9A01 LCD</span>
+        <span class="badge fps" id="fpsDisplay">60 FPS</span>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="workspace">
+      <!-- Device Simulator Frame -->
+      <section class="device-section">
+        <div class="device-container">
+          <div class="cnc-metal-case">
+            <div class="bezel-ring">
+              <div class="glass-screen">
+                <canvas id="lcdCanvas" width="240" height="240"></canvas>
+                <div class="touch-ripple" id="touchRipple"></div>
+              </div>
+            </div>
+            <div class="cnc-label">WAVESHARE ESP32-S3 LCD 1.28"</div>
+          </div>
+          <div class="device-hints">
+            <span>💡 Click/tap the screen to pat kitty!</span>
+            <span>👀 Move cursor over screen to track eyes</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Control Panel -->
+      <section class="controls-section">
+        <!-- Tabs -->
+        <div class="tabs-nav">
+          <button class="tab-btn active" data-tab="emotions">Emotions & Expressions</button>
+          <button class="tab-btn" data-tab="customizer">Theme & Motion</button>
+          <button class="tab-btn" data-tab="guide">Flashing Guide</button>
+        </div>
+
+        <!-- Tab 1: Emotions -->
+        <div class="tab-content active" id="tab-emotions">
+          <h3>Preset Emotions</h3>
+          <div class="emotion-grid">
+            <button class="emotion-btn active" data-emotion="idle">
+              <span class="btn-emoji">😽</span>
+              <span class="btn-label">Idle / Curious</span>
+            </button>
+            <button class="emotion-btn" data-emotion="happy">
+              <span class="btn-emoji">😸</span>
+              <span class="btn-label">Happy Purr</span>
+            </button>
+            <button class="emotion-btn" data-emotion="sleepy">
+              <span class="btn-emoji">😴</span>
+              <span class="btn-label">Sleepy ZzZ</span>
+            </button>
+            <button class="emotion-btn" data-emotion="heart_eyes">
+              <span class="btn-emoji">😻</span>
+              <span class="btn-label">Heart Eyes</span>
+            </button>
+            <button class="emotion-btn" data-emotion="dizzy">
+              <span class="btn-emoji">😵</span>
+              <span class="btn-label">Dizzy Shake</span>
+            </button>
+            <button class="emotion-btn" data-emotion="surprised">
+              <span class="btn-emoji">🙀</span>
+              <span class="btn-label">Surprised</span>
+            </button>
+            <button class="emotion-btn" data-emotion="angry">
+              <span class="btn-emoji">😾</span>
+              <span class="btn-label">Fierce / Angry</span>
+            </button>
+            <button class="emotion-btn" data-emotion="curious">
+              <span class="btn-emoji">🧐</span>
+              <span class="btn-label">Curious Tilt</span>
+            </button>
+          </div>
+
+          <h3>Instant Action Triggers</h3>
+          <div class="action-grid">
+            <button class="action-btn" id="btnBlink">
+              ✨ Trigger Blink
+            </button>
+            <button class="action-btn" id="btnPat">
+              ✋ Pat Head (Heart Burst)
+            </button>
+            <button class="action-btn" id="btnShake">
+              🌀 Shake Board (Dizzy)
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 2: Customizer -->
+        <div class="tab-content" id="tab-customizer">
+          <h3>Color Palette Preset</h3>
+          <div class="theme-selector">
+            <button class="theme-card active" data-theme="0">
+              <div class="theme-swatch" style="background: linear-gradient(135deg, #090B10, #00F0FF, #FF007F);"></div>
+              <span>Cyberpunk Cyan</span>
+            </button>
+            <button class="theme-card" data-theme="1">
+              <div class="theme-swatch" style="background: linear-gradient(135deg, #100800, #FFA500, #FF69B4);"></div>
+              <span>Orange Tabby</span>
+            </button>
+            <button class="theme-card" data-theme="2">
+              <div class="theme-swatch" style="background: linear-gradient(135deg, #000000, #FFD700, #FF4500);"></div>
+              <span>Midnight & Gold</span>
+            </button>
+            <button class="theme-card" data-theme="3">
+              <div class="theme-swatch" style="background: linear-gradient(135deg, #200814, #FFB6C1, #FF1493);"></div>
+              <span>Pastel Pink</span>
+            </button>
+          </div>
+
+          <h3>Motion & Eye Tracking</h3>
+          <div class="slider-group">
+            <label>
+              <span>Pupil Look X:</span>
+              <input type="range" id="sliderLookX" min="-1" max="1" step="0.05" value="0">
+            </label>
+            <label>
+              <span>Pupil Look Y:</span>
+              <input type="range" id="sliderLookY" min="-1" max="1" step="0.05" value="0">
+            </label>
+            <div class="toggle-row">
+              <span>Auto Mouse Cursor Eye Tracking</span>
+              <label class="switch">
+                <input type="checkbox" id="checkEyeTracking" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Flashing Guide -->
+        <div class="tab-content" id="tab-guide">
+          <h3>Flashing Firmware to Waveshare Board</h3>
+          <div class="guide-box">
+            <ol class="guide-steps">
+              <li>
+                <strong>Connect Hardware:</strong>
+                Plug your Waveshare ESP32-S3 1.28" board into your computer using a USB-C data cable.
+              </li>
+              <li>
+                <strong>Open in PlatformIO / VSCode:</strong>
+                Open the root project folder <code>kittybot</code> in VSCode with PlatformIO installed.
+              </li>
+              <li>
+                <strong>Build & Flash:</strong>
+                Run the build command in terminal:
+                <pre class="code-block">pio run -t upload</pre>
+              </li>
+              <li>
+                <strong>Serial Interactive Controls:</strong>
+                Open PlatformIO Serial Monitor at 115200 baud. Send key codes <code>1</code>..<code>8</code> to change cat expressions or <code>p</code> to pat!
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
