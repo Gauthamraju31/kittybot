@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Waveshare ESP32-S3 Cat Face Simulator & Web Serial Controller</title>
+  <title>Waveshare ESP32-S3 Cat Face Simulator & Lottie Vector Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <script src="assets/lottie.min.js"></script>
 </head>
 <body>
   <div class="app-container">
@@ -17,7 +18,7 @@
         <div class="logo-icon">🐱</div>
         <div>
           <h1>KittyBot ESP32-S3</h1>
-          <p class="subtitle">Waveshare 1.28" IPS Round LCD Animation Studio & Serial Controller</p>
+          <p class="subtitle">Waveshare 1.28" IPS Round LCD Animation Studio & Lottie Player</p>
         </div>
       </div>
       <div class="badge-group">
@@ -38,6 +39,7 @@
             <div class="bezel-ring">
               <div class="glass-screen">
                 <canvas id="lcdCanvas" width="240" height="240"></canvas>
+                <div id="lottieContainer" style="width: 240px; height: 240px; display: none;"></div>
                 <div class="touch-ripple" id="touchRipple"></div>
               </div>
             </div>
@@ -52,17 +54,27 @@
 
       <!-- Control Panel -->
       <section class="controls-section">
+        <!-- Engine Selector -->
+        <div class="engine-toggle-box">
+          <span>Rendering Engine Mode:</span>
+          <div class="engine-btns">
+            <button class="engine-btn active" id="modeProcedural">🐱 Physics Vector Engine</button>
+            <button class="engine-btn" id="modeLottie">🎬 Lottie JSON Player</button>
+          </div>
+        </div>
+
         <!-- Tabs -->
         <div class="tabs-nav">
           <button class="tab-btn active" data-tab="emotions">Emotions & Expressions</button>
+          <button class="tab-btn" data-tab="lottie">Lottie Vector Animations</button>
           <button class="tab-btn" data-tab="customizer">Theme & Motion</button>
           <button class="tab-btn" data-tab="serial">Serial Monitor</button>
           <button class="tab-btn" data-tab="guide">Flashing Guide</button>
         </div>
 
-        <!-- Tab 1: Emotions -->
+        <!-- Tab 1: Procedural Emotions -->
         <div class="tab-content active" id="tab-emotions">
-          <h3>Preset Emotions</h3>
+          <h3>Preset Emotions (Procedural Physics Engine)</h3>
           <div class="emotion-grid">
             <button class="emotion-btn active" data-emotion="idle" data-cmd="1">
               <span class="btn-emoji">😽</span>
@@ -112,7 +124,31 @@
           </div>
         </div>
 
-        <!-- Tab 2: Customizer -->
+        <!-- Tab 2: Lottie Open-Source Vector Animations -->
+        <div class="tab-content" id="tab-lottie">
+          <h3>Open-Source Lottie Vector Characters (After Effects JSON)</h3>
+          <p class="tab-desc">Resolution-independent vector animations exported from Adobe After Effects via Bodymovin.</p>
+          <div class="lottie-grid">
+            <button class="lottie-card active" data-path="assets/lottie/cat_idle.json">
+              <div class="lottie-preview-icon">🐈</div>
+              <div class="lottie-info">
+                <strong>Open-Source Vector Cat</strong>
+                <span>Smooth Wagging Tail & Blinking (18 Layers)</span>
+              </div>
+            </button>
+          </div>
+          <div class="lottie-controls">
+            <button class="action-btn" id="btnLottiePlay">▶️ Play</button>
+            <button class="action-btn" id="btnLottiePause">⏸️ Pause</button>
+
+            <label class="slider-label">
+              <span>Speed:</span>
+              <input type="range" id="lottieSpeedRange" min="0.2" max="2.5" step="0.1" value="1.0">
+            </label>
+          </div>
+        </div>
+
+        <!-- Tab 3: Customizer -->
         <div class="tab-content" id="tab-customizer">
           <h3>Color Palette Preset</h3>
           <div class="theme-selector">
@@ -154,7 +190,7 @@
           </div>
         </div>
 
-        <!-- Tab 3: Serial Console -->
+        <!-- Tab 4: Serial Console -->
         <div class="tab-content" id="tab-serial">
           <h3>Web Serial Live Output (115200 Baud)</h3>
           <div class="serial-console-box">
@@ -167,7 +203,7 @@
           </div>
         </div>
 
-        <!-- Tab 4: Flashing Guide -->
+        <!-- Tab 5: Flashing Guide -->
         <div class="tab-content" id="tab-guide">
           <h3>Flashing Firmware to Waveshare Board</h3>
           <div class="guide-box">

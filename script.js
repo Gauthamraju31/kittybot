@@ -1,5 +1,5 @@
-// HTML5 Canvas Pro Cat Face Simulator v2.0 & Web Serial Controller
-// Features Elastic Spring Physics, Squash & Stretch, Pupil Dilation & Bézier Motion
+// HTML5 Canvas Pro Cat Face Simulator v2.0 & Lottie Vector Player
+// Designed for Waveshare ESP32-S3 1.28" LCD Board
 
 const THEMES = [
   // 0: Cyberpunk Neon Cyan
@@ -154,6 +154,43 @@ class WebSerialController {
   }
 }
 
+class LottiePlayerManager {
+  constructor(containerElem) {
+    this.container = containerElem;
+    this.anim = null;
+    this.currentPath = 'assets/lottie/cat_idle.json';
+    this.load(this.currentPath);
+  }
+
+  load(path) {
+    if (this.anim) {
+      this.anim.destroy();
+    }
+    this.currentPath = path;
+    if (window.lottie) {
+      this.anim = window.lottie.loadAnimation({
+        container: this.container,
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        path: path
+      });
+    }
+  }
+
+  play() {
+    if (this.anim) this.anim.play();
+  }
+
+  pause() {
+    if (this.anim) this.anim.pause();
+  }
+
+  setSpeed(speed) {
+    if (this.anim) this.anim.setSpeed(speed);
+  }
+}
+
 class CatFaceSimulator {
   constructor(canvas, serialController) {
     this.canvas = canvas;
@@ -262,7 +299,6 @@ class CatFaceSimulator {
   update(dt) {
     this.animTime += dt;
 
-    // 1. Update Springs
     this.springLookX.update(dt);
     this.springLookY.update(dt);
     this.springSquashX.update(dt);
@@ -270,7 +306,6 @@ class CatFaceSimulator {
     this.springEarWiggle.update(dt);
     this.springPupilDilation.update(dt);
 
-    // 2. Dynamic Dilation Target
     switch (this.currentEmotion) {
       case 'happy':
       case 'heart_eyes':
@@ -288,7 +323,6 @@ class CatFaceSimulator {
         break;
     }
 
-    // 3. Idle Eye Tracking
     if (this.currentEmotion === 'idle' && this.autoEyeTracking && Math.random() < 0.02) {
       this.springLookX.target = (Math.random() - 0.5) * 1.2;
       this.springLookY.target = (Math.random() - 0.5) * 0.8;
@@ -297,7 +331,6 @@ class CatFaceSimulator {
       }
     }
 
-    // 4. Automatic Blinking
     const now = performance.now();
     if (now > this.nextBlinkTime && !this.isBlinking && this.currentEmotion === 'idle') {
       this.triggerBlink(false);
@@ -385,7 +418,6 @@ class CatFaceSimulator {
     const ctx = this.ctx;
     const earWiggle = this.springEarWiggle.pos + Math.sin(this.animTime * 5.0) * 2.5;
 
-    // Left Ear
     ctx.fillStyle = this.theme.earOuter;
     ctx.beginPath();
     ctx.moveTo(30, 65);
@@ -402,7 +434,6 @@ class CatFaceSimulator {
     ctx.closePath();
     ctx.fill();
 
-    // Right Ear
     ctx.fillStyle = this.theme.earOuter;
     ctx.beginPath();
     ctx.moveTo(145, 65);
@@ -656,8 +687,44 @@ class CatFaceSimulator {
 document.addEventListener('DOMContentLoaded', () => {
   const serialController = new WebSerialController();
   const canvas = document.getElementById('lcdCanvas');
+  const lottieContainer = document.getElementById('lottieContainer');
   const sim = new CatFaceSimulator(canvas, serialController);
+  const lottieMgr = new LottiePlayerManager(lottieContainer);
+
   sim.render();
+
+  // Engine Mode Switcher (Procedural vs Lottie)
+  const modeProcedural = document.getElementById('modeProcedural');
+  const modeLottie = document.getElementById('modeLottie');
+
+  if (modeProcedural && modeLottie) {
+    modeProcedural.addEventListener('click', () => {
+      modeProcedural.classList.add('active');
+      modeLottie.classList.remove('active');
+      canvas.style.display = 'block';
+      lottieContainer.style.display = 'none';
+    });
+
+    modeLottie.addEventListener('click', () => {
+      modeLottie.classList.add('active');
+      modeProcedural.classList.remove('active');
+      canvas.style.display = 'none';
+      lottieContainer.style.display = 'block';
+    });
+  }
+
+  // Lottie Controls
+  const btnLottiePlay = document.getElementById('btnLottiePlay');
+  const btnLottiePause = document.getElementById('btnLottiePause');
+  const lottieSpeedRange = document.getElementById('lottieSpeedRange');
+
+  if (btnLottiePlay) btnLottiePlay.addEventListener('click', () => lottieMgr.play());
+  if (btnLottiePause) btnLottiePause.addEventListener('click', () => lottieMgr.pause());
+  if (lottieSpeedRange) {
+    lottieSpeedRange.addEventListener('input', (e) => {
+      lottieMgr.setSpeed(parseFloat(e.target.value));
+    });
+  }
 
   // Tab Navigation
   const tabBtns = document.querySelectorAll('.tab-btn');
@@ -668,7 +735,8 @@ document.addEventListener('DOMContentLoaded', () => {
       tabBtns.forEach(b => b.classList.remove('active'));
       tabContents.forEach(c => c.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+      const targetContent = document.getElementById(`tab-${btn.dataset.tab}`);
+      if (targetContent) targetContent.classList.add('active');
     });
   });
 

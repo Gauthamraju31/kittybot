@@ -186,9 +186,10 @@ body {
   position: relative;
   box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.1);
   cursor: pointer;
+  background: #000;
 }
 
-#lcdCanvas {
+#lcdCanvas, #lottieContainer {
   width: 240px;
   height: 240px;
   display: block;
@@ -244,11 +245,50 @@ body {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
+/* Engine Toggle Box */
+.engine-toggle-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--panel-border);
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+.engine-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.engine-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--text-sub);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.engine-btn.active {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.2);
+}
+
 .tabs-nav {
   display: flex;
   gap: 8px;
   border-bottom: 1px solid var(--panel-border);
   padding-bottom: 12px;
+  overflow-x: auto;
 }
 
 .tab-btn {
@@ -262,6 +302,7 @@ body {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .tab-btn:hover {
@@ -291,6 +332,12 @@ body {
   color: var(--text-sub);
   letter-spacing: 0.5px;
   text-transform: uppercase;
+}
+
+.tab-desc {
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.4;
 }
 
 /* Emotion Grid */
@@ -360,6 +407,80 @@ body {
   background: rgba(0, 240, 255, 0.2);
   box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
   transform: translateY(-2px);
+}
+
+/* Lottie Cards */
+.lottie-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lottie-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-main);
+  text-align: left;
+}
+
+.lottie-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--accent-cyan);
+}
+
+.lottie-card.active {
+  background: rgba(0, 240, 255, 0.12);
+  border-color: var(--accent-cyan);
+  box-shadow: var(--shadow-glow);
+}
+
+.lottie-preview-icon {
+  font-size: 32px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.lottie-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lottie-info strong {
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.lottie-info span {
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.lottie-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--panel-border);
+}
+
+.slider-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-sub);
+  margin-left: auto;
 }
 
 /* Theme Selector */
